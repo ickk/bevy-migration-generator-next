@@ -8,7 +8,7 @@ readme = "README.md"
 [dependencies]
 ureq = { version = "2.5.0", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
-anyhow = "1.0.58"
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 pulldown-cmark = "0.9.2"
 base64 = "0.21.0"
 clap = { version = "4.0.18", features = ["derive"] }
@@ -16,3 +16,7 @@ chrono = { version = "0.4.22", features = ["serde"] }
 regex = "1.7.0"
 dotenvy = "0.15.6"
 serde_json = "1.0.91"
+git2 = "0.17.2"
+config = "0.13.3"
+derivative = "2.2.0"
+colored = "2.0.4"

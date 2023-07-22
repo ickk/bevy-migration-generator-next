@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use anyhow::bail;
 use chrono::{DateTime, NaiveDate, Utc};
+use derivative::Derivative;
 use serde::Deserialize;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -38,6 +39,7 @@ pub struct GithubCommitContent {
 #[derive(Deserialize, Clone, Debug)]
 pub struct GithubUser {
     pub login: String,
+    pub id: u32,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -93,17 +95,18 @@ pub struct GithubIssuesResponse {
     pub pull_request: Option<GithubIssuesResponsePullRequest>,
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct GithubClient {
     agent: ureq::Agent,
+    #[derivative(Debug = "ignore")]
     token: String,
     pub repo: String,
 }
 
 impl GithubClient {
     pub fn new(token: String, repo: String) -> Self {
-        let agent: ureq::Agent = ureq::AgentBuilder::new()
-            .user_agent("bevy-website-generate-release")
-            .build();
+        let agent: ureq::Agent = ureq::AgentBuilder::new().user_agent("relge").build();
 
         Self { agent, token, repo }
     }
@@ -111,8 +114,8 @@ impl GithubClient {
     fn get(&self, path: &str) -> ureq::Request {
         self.agent
             .get(&format!(
-                "https://api.github.com/repos/bevyengine/{}/{path}",
-                self.repo
+                "https://api.github.com/repos/{repo}/{path}",
+                repo = self.repo
             ))
             .set("Accept", "application/json")
             .set("Authorization", &format!("Bearer {}", self.token))
@@ -170,7 +173,9 @@ impl GithubClient {
         since: &str,
         label: Option<&str>,
     ) -> anyhow::Result<Vec<GithubIssuesResponse>> {
-        let naive_datetime = NaiveDate::parse_from_str(since, "%Y-%m-%d")?.and_hms(0, 0, 0);
+        let naive_datetime = NaiveDate::parse_from_str(since, "%Y-%m-%d")?
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
         let datetime_utc = DateTime::<Utc>::from_utc(naive_datetime, Utc);
 
         let mut prs = vec![];
@@ -239,12 +244,12 @@ impl GithubClient {
         let query = format!(
             r#"
 query {{
-    resource(url: "https://github.com/bevyengine/{}/commit/{commit_sha}") {{
+    resource(url: "https://github.com/{repo}/commit/{commit_sha}") {{
         ... on Commit {{
             authors(first: 10) {{
                 nodes {{
                     user {{
-                        login
+                        login,
                     }},
                     name
                 }}
@@ -252,7 +257,7 @@ query {{
         }}
     }}
 }}"#,
-            self.repo
+            repo = self.repo
         );
         // for whatever reasons, github doesn't accept newlines in graphql queries
         let query = query.replace('\n', "");

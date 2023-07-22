@@ -23,9 +23,8 @@ pub fn get_merged_prs(
     // We also get the list of merged PRs in batches instead of getting them separately for each commit
     let prs = client.get_merged_prs(base_commit_date, label)?;
     println!(
-        "Found {} merged PRs since {} (the base commit date)",
+        "Found {} merged PRs since {base_commit_date} (the base commit date)",
         prs.len(),
-        base_commit_date
     );
 
     let mut out = vec![];
@@ -39,7 +38,7 @@ pub fn get_merged_prs(
             // If there's no label, then not finding a PR is an issue because this means we want all PRs
             // If there's a label then it just means the commit is not a PR with the label
             if label.is_none() {
-                println!("\x1b[93mPR not found for {title} sha: {}\x1b[0m", commit.sha);
+                println!("\x1b[93mPR not found for {title} sha: {sha}\x1b[0m", sha = commit.sha);
             }
             continue;
         };
@@ -68,18 +67,17 @@ fn get_pr_title_from_commit(commit: &GithubCommitResponse) -> Option<String> {
     Some(title.to_string())
 }
 
-pub fn get_pr_area(pr: &GithubIssuesResponse) -> String {
-    let areas: Vec<String> = pr
-        .labels
+/// Get a list of all the A-Area labels on a PR
+pub fn get_pr_areas(pr: &GithubIssuesResponse) -> Vec<String> {
+    pr.labels
         .iter()
-        .map(|l| l.name.clone())
-        .filter(|l| l.starts_with("A-"))
-        .collect();
-    if areas.is_empty() {
-        String::from("No area label")
-    } else {
-        areas.join(" + ")
-    }
+        .filter_map(|label| {
+            label
+                .name
+                .starts_with("A-")
+                .then_some(label.name.replace("A-", ""))
+        })
+        .collect()
 }
 
 pub fn get_contributors(
@@ -93,19 +91,20 @@ pub fn get_contributors(
         Ok(logins) => {
             if logins.is_empty() {
                 bail!(
-                    "\x1b[93mNo contributors found for https://github.com/bevyengine/{}/pull/{} sha: {}\x1b[0m",
-                    client.repo,
-                    pr.number,
-                    commit.sha
+                    "\x1b[93mNo contributors found for https://github.com/{repo}/pull/{pr} sha: {sha}\x1b[0m",
+                    repo = client.repo,
+                    pr = pr.number,
+                    sha = commit.sha
                 );
             }
             Ok(logins)
         }
         Err(err) => {
             bail!(
-                "\x1b[93m{err:?}\nhttps://github.com/bevyengine/bevy/pull/{}\n{}\x1b[0m",
-                pr.number,
-                commit.sha
+                "\x1b[93m{err:?}\nhttps://github.com/{repo}/pull/{pr}\n{sha}\x1b[0m",
+                repo = client.repo,
+                pr = pr.number,
+                sha = commit.sha
             );
         }
     }

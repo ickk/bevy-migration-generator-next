@@ -1,17 +1,14 @@
-use changelog::generate_changelog;
-use clap::{Parser as ClapParser, Subcommand};
-use migration_guide::generate_migration_guide;
-use release_notes::generate_release_note;
-use release_notes_website::generate_release_notes_website;
-use std::path::PathBuf;
-
-mod changelog;
+mod git_client;
 mod github_client;
 mod helpers;
 mod markdown;
-mod migration_guide;
-mod release_notes;
-mod release_notes_website;
+mod migration_note;
+mod settings;
+
+use crate::helpers::get_merged_prs;
+use crate::migration_note::migration_notes_command;
+use crate::settings::get_settings;
+use clap::{Parser as ClapParser, Subcommand};
 
 /// Generates markdown files used for a bevy releases.
 ///
@@ -42,7 +39,11 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    MigrationGuide {
+    MigrationNotes {
+        /// release-name
+        #[arg(short, long)]
+        release: String,
+
         /// The name of the branch / tag to start from
         #[arg(long)]
         from: String,
@@ -51,107 +52,34 @@ enum Commands {
         #[arg(long)]
         to: String,
 
-        /// Title of the frontmatter
-        #[arg(short, long)]
-        title: String,
+        /// Create the release folder in the migration_notes repository if it
+        /// doesn't already exist
+        #[arg(long)]
+        create_release: bool,
 
-        /// Weight used for sorting
-        #[arg(short, long)]
-        weight: i32,
+        /// Clone the migration_notes repository if it doesn't already exist
+        #[arg(long)]
+        clone: bool,
 
-        /// Path used to output the generated file. Defaults to ./migration-guide.md
-        #[arg(short, long)]
-        path: Option<std::path::PathBuf>,
-    },
-    ReleaseNote {
-        /// The name of the branch / tag to start from
-        #[arg(short, long)]
-        from: String,
-
-        /// The name of the branch / tag to end on
-        #[arg(short, long)]
-        to: String,
-
-        /// Path used to output the generated file. Defaults to ./release-notes.md
-        #[arg(short, long)]
-        path: Option<std::path::PathBuf>,
-    },
-    ReleaseNoteWebsite {
-        /// The name of the branch / tag to start from
-        #[arg(short, long)]
-        from: String,
-
-        /// The name of the branch / tag to end on
-        #[arg(short, long)]
-        to: String,
-
-        /// Path used to output the generated file. Defaults to ./release-notes-website.md
-        #[arg(short, long)]
-        path: Option<std::path::PathBuf>,
-    },
-    Changelog {
-        /// The name of the branch / tag to start from
-        #[arg(short, long)]
-        from: String,
-
-        /// The name of the branch / tag to end on
-        #[arg(short, long)]
-        to: String,
-
-        /// Path used to output the generated file. Defaults to ./changelog.md
-        #[arg(short, long)]
-        path: Option<std::path::PathBuf>,
+        #[arg(long)]
+        no_create_commit: bool,
     },
 }
 
 fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
-
     let args = Args::parse();
-    let repo = if let Commands::ReleaseNoteWebsite { .. } = args.command {
-        "bevy-website"
-    } else {
-        "bevy"
-    };
-    let mut client = github_client::GithubClient::new(
-        std::env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN not found"),
-        repo.to_string(),
-    );
 
     match args.command {
-        Commands::MigrationGuide {
+        Commands::MigrationNotes {
+            release,
+            create_release,
+            no_create_commit,
+            clone,
             from,
             to,
-            title,
-            weight,
-            path,
-        } => generate_migration_guide(
-            &title,
-            weight,
-            &from,
-            &to,
-            path.unwrap_or_else(|| PathBuf::from("./migration-guide.md")),
-            &mut client,
-        )?,
-        Commands::ReleaseNote { from, to, path } => generate_release_note(
-            &from,
-            &to,
-            path.unwrap_or_else(|| PathBuf::from("./release-notes.md")),
-            &mut client,
-        )?,
-        Commands::ReleaseNoteWebsite { from, to, path } => generate_release_notes_website(
-            &from,
-            &to,
-            path.unwrap_or_else(|| PathBuf::from("./release-notes-website.md")),
-            &mut client,
-        )?,
-        Commands::Changelog { from, to, path } => generate_changelog(
-            &from,
-            &to,
-            path.unwrap_or_else(|| PathBuf::from("./changelog.md")),
-            &mut client,
-        )?,
-    };
+        } => migration_notes_command(release, create_release, no_create_commit, clone, from, to),
+    }?;
 
     Ok(())
 }

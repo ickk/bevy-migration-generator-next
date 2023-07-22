@@ -1,0 +1,4 @@
+source_repo = "https://github.com/bevyengine/bevy"
+migration_notes_repo = "https://github.com/ickk/migration_notes"
+migration_notes_local_path = "./migration_notes"
+project_prefix = "bevy"

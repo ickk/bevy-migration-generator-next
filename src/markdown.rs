@@ -1,12 +1,15 @@
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag};
-use std::fmt::Write;
+use std::io::Write;
 
 /// Writes the markdown section of the givent section header to the output.
 /// The header name needs to be in lower case.
+///
+/// Takes an `&mut impl Write`, which can be a File. If you want to write to a
+/// String, then use a `Vec<u8>` and call `std::str::from_utf` to convert.
 pub fn write_markdown_section(
     body: &str,
     section_header: &str,
-    output: &mut String,
+    output: &mut impl Write,
     write_todo: bool,
 ) -> anyhow::Result<bool> {
     // Parse the body of the PR
@@ -67,16 +70,11 @@ pub fn write_markdown_section(
         }
     }
 
-    if !section_found {
+    if !section_found && write_todo {
         // Someone didn't write a migration guide 😢
-        if write_todo {
-            writeln!(output, "\n<!-- TODO -->")?;
-            println!("\x1b[93m{section_header} not found!\x1b[0m");
-        }
-        Ok(false)
-    } else {
-        Ok(true)
+        writeln!(output, "\n<!-- TODO -->")?;
     }
+    Ok(section_found)
 }
 
 /// Write the markdown Event based on the Tag
@@ -84,7 +82,7 @@ pub fn write_markdown_section(
 /// This also makes sure the result has a more consistent formatting
 fn write_markdown_event(
     event: &Event,
-    output: &mut String,
+    output: &mut impl Write,
     list_item_level: i32,
 ) -> anyhow::Result<()> {
     match event {
